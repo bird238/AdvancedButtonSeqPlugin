@@ -17,6 +17,7 @@
 #include <vector>
 #include <cstdint>
 #include <utility>
+#include <mutex>
 
 
 static const int abs_NUM_CHANNELS = 6;
@@ -140,7 +141,14 @@ struct AdvancedButtonSeq : Module {
 	bool cvContRecording = false;// actively appending samples to cvContRecBuf
 	int cvContRecChannel = 0;// channel locked in at the moment recording was armed/started
 	float cvContRecStartValue = 0.0f;// value of the very first sample of the current/last recording pass
-	std::vector<float> cvContRecBuf;// in-progress capture, not yet committed
+	std::vector<float> cvContRecBuf;// in-progress capture (audio thread only, never touched by the UI thread)
+
+	// cvContBuf/cvContBufSampleRate cross threads: the audio thread commits a finished recording
+	// pass (and reads it back every sample for playback) while the UI thread reads it for the
+	// scope/WAV-export and can replace it outright via the "Load wave from file" menu action, so
+	// every access on either thread must hold cvContBufMutex (a torn std::vector during a
+	// concurrent std::move-assignment is a real use-after-free hazard, not just a stale display).
+	mutable std::mutex cvContBufMutex;
 	std::vector<float> cvContBuf[abs_NUM_CHANNELS];// committed per-channel recorded loop (empty = none recorded yet)
 	float cvContBufSampleRate[abs_NUM_CHANNELS] = {};// engine sample rate at the moment each buffer was committed (for WAV export)
 
@@ -182,6 +190,7 @@ struct AdvancedButtonSeq : Module {
 	inline float& cvContAt(int c, int s) {return cvCont[c][bank[c]][s];}
 
 	inline float readCvContBuf(int c, float phase01) {
+		std::lock_guard<std::mutex> lock(cvContBufMutex);
 		const std::vector<float>& buf = cvContBuf[c];
 		size_t n = buf.size();
 		if (n == 0) return 0.0f;
@@ -306,9 +315,12 @@ struct AdvancedButtonSeq : Module {
 		cvContRecChannel = 0;
 		cvContRecStartValue = 0.0f;
 		cvContRecBuf.clear();
-		for (int c = 0; c < abs_NUM_CHANNELS; c++) {
-			cvContBuf[c].clear();
-			cvContBufSampleRate[c] = 0.0f;
+		{
+			std::lock_guard<std::mutex> lock(cvContBufMutex);
+			for (int c = 0; c < abs_NUM_CHANNELS; c++) {
+				cvContBuf[c].clear();
+				cvContBufSampleRate[c] = 0.0f;
+			}
 		}
 		for (int i = 0; i < abs_CVCONT_SCOPE_N; i++)
 			cvContScopeBuf[i] = 0.0f;
@@ -729,8 +741,11 @@ struct AdvancedButtonSeq : Module {
 				// CV-cont cyclic sampler: a recording pass always ends exactly at EOC, so it always
 				// covers exactly one sequence length regardless of when it was armed/started.
 				if (cvContRecording && wrapped) {
-					cvContBuf[cvContRecChannel] = std::move(cvContRecBuf);
-					cvContBufSampleRate[cvContRecChannel] = (float) args.sampleRate;
+					{
+						std::lock_guard<std::mutex> lock(cvContBufMutex);
+						cvContBuf[cvContRecChannel] = std::move(cvContRecBuf);
+						cvContBufSampleRate[cvContRecChannel] = (float) args.sampleRate;
+					}
 					cvContRecBuf.clear();
 					cvContRecording = false;
 					cvContRecArmed = false;

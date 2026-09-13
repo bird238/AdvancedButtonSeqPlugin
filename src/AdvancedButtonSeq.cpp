@@ -251,7 +251,20 @@ bool AdvancedButtonSeq::loadNativeFromFile() {
 // ***************************************************************************************
 
 bool AdvancedButtonSeq::saveCvContWaveToFile(int chan) {
-	if (chan < 0 || chan >= abs_NUM_CHANNELS || cvContBuf[chan].empty()) return false;
+	if (chan < 0 || chan >= abs_NUM_CHANNELS) return false;
+
+	// Snapshot under lock, then release it before the (blocking) file dialog and disk write --
+	// cvContBufMutex is also taken by the audio thread every sample during loop playback, so it
+	// must never be held across osdialog_file()/fwrite(), which can block for as long as the user
+	// takes to pick a file.
+	std::vector<float> bufCopy;
+	float sampleRate;
+	{
+		std::lock_guard<std::mutex> lock(cvContBufMutex);
+		if (cvContBuf[chan].empty()) return false;
+		bufCopy = cvContBuf[chan];
+		sampleRate = cvContBufSampleRate[chan];
+	}
 
 	osdialog_filters* filters = osdialog_filters_parse("CV cont wave:abscv");
 	char* path = osdialog_file(OSDIALOG_SAVE, NULL, "AdvancedButtonSeq-CVcont.abscv", filters);
@@ -261,9 +274,9 @@ bool AdvancedButtonSeq::saveCvContWaveToFile(int chan) {
 	json_t* root = json_object();
 	json_object_set_new(root, "AdvancedButtonSeqCvContWave", json_integer(1));
 	json_object_set_new(root, "channel", json_integer(chan));
-	json_object_set_new(root, "sampleRate", json_real(cvContBufSampleRate[chan]));
+	json_object_set_new(root, "sampleRate", json_real(sampleRate));
 	json_t* arr = json_array();
-	for (float v : cvContBuf[chan])
+	for (float v : bufCopy)
 		json_array_append_new(arr, json_real(v));
 	json_object_set_new(root, "samples", arr);
 
@@ -280,7 +293,17 @@ bool AdvancedButtonSeq::saveCvContWaveToFile(int chan) {
 }
 
 bool AdvancedButtonSeq::exportCvContWaveToWav(int chan) {
-	if (chan < 0 || chan >= abs_NUM_CHANNELS || cvContBuf[chan].empty()) return false;
+	if (chan < 0 || chan >= abs_NUM_CHANNELS) return false;
+
+	// Same snapshot-then-release pattern as saveCvContWaveToFile() -- see comment there.
+	std::vector<float> buf;
+	float bufSampleRate;
+	{
+		std::lock_guard<std::mutex> lock(cvContBufMutex);
+		if (cvContBuf[chan].empty()) return false;
+		buf = cvContBuf[chan];
+		bufSampleRate = cvContBufSampleRate[chan];
+	}
 
 	osdialog_filters* filters = osdialog_filters_parse("WAV audio:wav");
 	char* path = osdialog_file(OSDIALOG_SAVE, NULL, "AdvancedButtonSeq-CVcont.wav", filters);
@@ -291,9 +314,8 @@ bool AdvancedButtonSeq::exportCvContWaveToWav(int chan) {
 	free(path);
 	if (!f) return false;
 
-	const std::vector<float>& buf = cvContBuf[chan];
 	uint32_t numSamples = (uint32_t) buf.size();
-	uint32_t sampleRate = (uint32_t) std::round(cvContBufSampleRate[chan] > 0.f ? cvContBufSampleRate[chan] : 48000.f);
+	uint32_t sampleRate = (uint32_t) std::round(bufSampleRate > 0.f ? bufSampleRate : 48000.f);
 	uint16_t numChannels = 1;
 	uint16_t bitsPerSample = 16;
 	uint32_t byteRate = sampleRate * numChannels * bitsPerSample / 8;
@@ -427,8 +449,14 @@ bool AdvancedButtonSeq::loadCvContWaveFromFile(int chan) {
 	fclose(f);
 	if (samples.empty()) return false;
 
-	cvContBuf[chan] = std::move(samples);
-	cvContBufSampleRate[chan] = sampleRate;
+	// samples/sampleRate are local up to this point; only the final commit touches shared state,
+	// so only it needs the lock (see cvContBufMutex's declaration for why this must be locked at
+	// all -- this can otherwise race with the audio thread's own playback read/EOC commit).
+	{
+		std::lock_guard<std::mutex> lock(cvContBufMutex);
+		cvContBuf[chan] = std::move(samples);
+		cvContBufSampleRate[chan] = sampleRate;
+	}
 	return true;
 }
 
@@ -906,9 +934,15 @@ struct AdvancedButtonSeqWidget : ModuleWidget {
 			// Loop-start marker: a small ">" pinned to the left edge at the voltage the current take
 			// began at (while recording) or the committed loop's first sample (otherwise) -- a fixed
 			// reference so a live take can be steered back to it for a click-free loop join.
-			bool haveStart = recording || !module->cvContBuf[module->channel].empty();
+			bool haveStart;
+			float committedFront = 0.f;
+			{
+				std::lock_guard<std::mutex> lock(module->cvContBufMutex);
+				haveStart = recording || !module->cvContBuf[module->channel].empty();
+				if (haveStart && !recording) committedFront = module->cvContBuf[module->channel].front();
+			}
 			if (haveStart) {
-				float startVal = recording ? module->cvContRecStartValue : module->cvContBuf[module->channel].front();
+				float startVal = recording ? module->cvContRecStartValue : committedFront;
 				float my = yFor(startVal);
 				std::shared_ptr<Font> font = loadABSFont(2);
 				if (font) {
