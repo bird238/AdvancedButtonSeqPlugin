@@ -1138,7 +1138,11 @@ struct AdvancedButtonSeqWidget : ModuleWidget {
 		}));
 
 		menu->addChild(new MenuSeparator());
-		bool hasWave = !module->cvContBuf[module->channel].empty();
+		bool hasWave;
+		{
+			std::lock_guard<std::mutex> lock(module->cvContBufMutex);
+			hasWave = !module->cvContBuf[module->channel].empty();
+		}
 		menu->addChild(createMenuLabel(string::f("CV cont wave (channel %i)%s", module->channel + 1, hasWave ? "" : " -- nothing recorded")));
 		menu->addChild(createMenuItem("Save wave as file...", "", [=]() {
 			module->saveCvContWaveToFile(module->channel);
