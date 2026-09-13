@@ -1,4 +1,4 @@
-# Advanced Button Seq Plugin (`Idleness`)
+# Advanced Button Seq Plugin 
 
 **Advanced Button Seq** is a standalone, single-module VCV Rack 2 plugin containing a 6-channel, 128-step graphical step sequencer. The plugin engine is built on top of a trimmed subset of internal utility code from the open-source Impromptu Modular plugin (by Marc Boulé) and extended with an original graphical step editor, dual pattern banks, extended per-step parameters, an audio-rate CV cyclic sampler with live oscilloscope, and native/MIDI file export.
 
@@ -82,40 +82,4 @@ No compiled binaries are distributed in this repository. The plugin must be buil
 
 > **Note**: This plugin is an independent work and is not affiliated with, endorsed by, or connected to Marc Boulé, Impromptu Modular, VCV, or Andrew Belt.
 
----
 
-## Licensing Overview
-
-| Component | License | Details |
-| :--- | :--- | :--- |
-| **Source Code** | GPL-3.0-or-later | Original & Impromptu-derived source files (see [`LICENSE`](LICENSE)) |
-| **Panel Artwork** | GPL-3.0-or-later | Original SVG layout design (`res/panels/AdvancedButtonSeq.svg`) |
-| **Fonts** | SIL OFL 1.1 | Bundled unmodified third-party fonts (see `res/fonts/`) |
-
-For complete per-component legal and license breakdowns, consult [`LICENSE.md`](LICENSE.md).
-
----
-
-## Publishing to the VCV Library
-
-To submit this plugin to the official [VCV Rack Library](https://library.vcvrack.com/):
-
-1. **Push Source Code**: Ensure all changes are committed and pushed to the public repository on GitHub (`https://github.com/bird238/AdvancedButtonSeqPlugin`).
-2. **Verify Manifest**: Confirm that `plugin.json` contains valid metadata (slug: `AdvancedButtonSeqPlugin`, brand: `Idleness`, version: `1.0.0`, license: `GPL-3.0-or-later`, minRackVersion: `2.4.0`).
-3. **Open Library Issue**: Open a single issue on the official [VCV Library issue tracker](https://github.com/VCVRack/library/issues).
-   - **Title**: `AdvancedButtonSeqPlugin` (must match the plugin slug exactly).
-   - **Body**: Provide the link to the public repository (`https://github.com/bird238/AdvancedButtonSeqPlugin`).
-4. **Ethics Compliance**: Ensure the repository strictly adheres to VCV Plugin Ethics Guidelines.
-5. **Future Version Updates**: To release updates:
-   - Increment the `version` field in `plugin.json`.
-   - Commit and push to GitHub.
-   - Reply to the existing issue thread on `VCVRack/library` specifying the new version number and the exact git commit hash (e.g., `git rev-parse HEAD`), rather than a branch name.
-
----
-
-> [!NOTE]
-> ### Why This Plugin Is License-Safe
-> - **GPL Copyleft Compliance**: All derived C++ source code remains under GPL-3.0-or-later, preserving original copyright notices from Impromptu Modular.
-> - **Clean Room Panel Art**: Upstream Impromptu Modular panel artwork is licensed under CC BY-NC-ND 4.0 (no-derivatives). To comply fully, this module uses an original panel layout drawn from scratch without using upstream graphics.
-> - **Distinct Branding & Identity**: Uses distinct slug (`AdvancedButtonSeqPlugin`), brand (`Idleness`), and module name (`Advanced Button Seq`) to prevent trademark confusion or implied affiliation.
-> - **Font License Integrity**: Bundled fonts remain unmodified and retain their respective SIL Open Font License 1.1 notices in `res/fonts/`.
