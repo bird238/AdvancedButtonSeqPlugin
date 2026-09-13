@@ -1,0 +1,17 @@
+{
+	"slug": "AdvancedButtonSeqPlugin",
+	"name": "Advanced Button Seq",
+	"version": "1.0.0",
+	"license": "GPL-3.0-or-later",
+	"author": "bird238",
+	"brand": "Idleness",
+	"minRackVersion": "2.4.0",
+	"modules": [
+		{
+			"slug": "AdvancedButtonSeq",
+			"name": "Advanced Button Seq",
+			"description": "6-channel, 128-step graphical sequencer with per-step CV2/CV3/gate-length, Tie/Glide, output matrix, Sample & Hold, CV-cont cyclic sampler with oscilloscope, Undo/Redo, Copy/Paste and MIDI/native export",
+			"tags": ["Sequencer"]
+		}
+	]
+}
